@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Irracionais Invasores - Versão Completa</title>
+  <style>
+    body {
+      text-align: center;
+      background-color: #ccf;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+    #info, #tip, #final-score, #ranking, #restart-btn {
+      font-size: 18px;
+      margin-top: 10px;
+    }
+    #tip {
+      font-style: italic;
+      color: #005500;
+      height: 24px;
+      transition: opacity 0.5s;
+      opacity: 0;
+    }
+    #tip.show {
+      opacity: 1;
+    }
+    #restart-btn {
+      display: none;
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 18px;
+      background-color: #0055aa;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 Irracionais Invasores</h1>
+  <p><strong>Objetivo:</strong> Clique nos <strong>números irracionais</strong> para destruí-los antes que caiam.  
+  <br>Os racionais podem passar.  
+  <br>Não deixe os irracionais escaparem!</p>
+
+  <div id="info">Fase: <span id="level">1</span> | Tempo: <span id="timer">60</span>s | Pontos: <span id="score">0</span> | Vidas: <span id="lives">❤️❤️❤️</span></div>
+  <div id="tip"></div>
+  <div id="final-score"></div>
+  <div id="ranking"></div>
+  <button id="restart-btn" onclick="restartGame()">🔁 Jogar Novamente</button>
+
+  <audio id="hitSound" src="audio/hit.mp3"></audio>
+  <audio id="errorSound" src="audio/error.mp3"></audio>
+  <audio id="bgm" src="audio/background.mp3" loop></audio>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+  <script>
+let numbers = [];
+let score = 0;
+let lives = 3;
+let level = 1;
+let feedbacks = [];
+let errorMessage = "";
+let errorTimer = 0;
+let flashRed = false;
+let flashTimer = 0;
+let tipTimeout = null;
+let timer = 60;
+let spawnInterval = 1500;
+let gameOver = false;
+let levelUpScore = 50;
+let started = false;
+
+const hitSound = document.getElementById("hitSound");
+const errorSound = document.getElementById("errorSound");
+const bgm = document.getElementById("bgm");
+
+function setup() {
+  createCanvas(600, 400);
+  textAlign(CENTER);
+  setInterval(updateTimer, 1000);
+  setInterval(spawnNumber, spawnInterval);
+  updateInfo();
+}
+
+function draw() {
+  background(flashRed ? '#fbb' : '#eef');
+  if (flashRed && --flashTimer <= 0) flashRed = false;
+
+  for (let i = numbers.length - 1; i >= 0; i--) {
+    let n = numbers[i];
+    n.y += 2 + level;
+    textSize(24);
+    fill("#003366");
+    text(n.label, n.x, n.y);
+    if (n.y > height + 30) {
+      if (n.type === "irrational") {
+        lives--;
+        showError("Você deixou um número irracional escapar!");
+        flashRedScreen();
+        showTip("Irracionais não podem ser expressos como frações.");
+        errorSound.play();
+      }
+      numbers.splice(i, 1);
+      updateInfo();
+    }
+  }
+
+  for (let i = feedbacks.length - 1; i >= 0; i--) {
+    let fb = feedbacks[i];
+    fb.y -= 1;
+    fb.alpha -= 5;
+    fill(0, fb.alpha);
+    textSize(16);
+    text(fb.text, fb.x, fb.y);
+    if (fb.alpha <= 0) feedbacks.splice(i, 1);
+  }
+
+  if (errorTimer > 0) {
+    fill("red");
+    textSize(18);
+    text(errorMessage, width / 2, 30);
+    errorTimer--;
+  }
+
+  if (lives <= 0 || timer <= 0) endGame();
+}
+
+function mousePressed() {
+  if (!started) {
+    bgm.play();
+    started = true;
+  }
+
+  for (let i = numbers.length - 1; i >= 0; i--) {
+    let n = numbers[i];
+    if (dist(mouseX, mouseY, n.x, n.y) < 30) {
+      if (n.type === "irrational") {
+        score += 10;
+        showFeedback("+10", n.x, n.y);
+        hitSound.play();
+        if (score >= level * levelUpScore) {
+          level++;
+          document.getElementById("level").innerText = level;
+        }
+      } else {
+        lives--;
+        showError("Esse número é racional! Não era para destruir.");
+        flashRedScreen();
+        showTip("Racionais podem ser escritos como frações.");
+        errorSound.play();
+      }
+      numbers.splice(i, 1);
+      updateInfo();
+      break;
+    }
+  }
+}
+
+function updateInfo() {
+  document.getElementById("score").innerText = score;
+  document.getElementById("lives").innerText = "❤️".repeat(lives);
+}
+
+function showFeedback(txt, x, y) {
+  feedbacks.push({ text: txt, x: x, y: y, alpha: 255 });
+}
+
+function showError(msg) {
+  errorMessage = msg;
+  errorTimer = 60;
+}
+
+function flashRedScreen() {
+  flashRed = true;
+  flashTimer = 15;
+}
+
+function showTip(msg) {
+  const tipEl = document.getElementById("tip");
+  tipEl.textContent = msg;
+  tipEl.classList.add("show");
+  clearTimeout(tipTimeout);
+  tipTimeout = setTimeout(() => tipEl.classList.remove("show"), 3000);
+}
+
+function spawnNumber() {
+  if (gameOver) return;
+  let irrationals = ["\u221a2", "\u03c0", "e", "\u221a3", "\u221a5", "\u221a7", "\u03c6", "\u221a10", "\u221a11", "\u221a13"];
+  let rationals = ["1/2", "3/4", "1", "2", "0,25", "5/2", "0,75", "4", "2/3"];
+  let isIrrational = random() < 0.5;
+  let label = isIrrational ? random(irrationals) : random(rationals);
+  numbers.push({
+    x: random(50, width - 50),
+    y: -20,
+    label: label,
+    type: isIrrational ? "irrational" : "rational"
+  });
+}
+
+function updateTimer() {
+  if (!gameOver) {
+    timer--;
+    document.getElementById("timer").innerText = timer;
+  }
+}
+
+function endGame() {
+  if (gameOver) return;
+  gameOver = true;
+  noLoop();
+  document.getElementById("final-score").innerHTML = `<h2>Fim de Jogo!</h2><p>Você fez ${score} pontos e chegou à fase ${level}.</p>`;
+  document.getElementById("restart-btn").style.display = "inline-block";
+  updateRanking();
+}
+
+function restartGame() {
+  score = 0;
+  lives = 3;
+  level = 1;
+  timer = 60;
+  numbers = [];
+  feedbacks = [];
+  gameOver = false;
+  started = false;
+  document.getElementById("restart-btn").style.display = "none";
+  document.getElementById("final-score").innerHTML = "";
+  document.getElementById("ranking").innerHTML = "";
+  updateInfo();
+  loop();
+  bgm.currentTime = 0;
+}
+
+function updateRanking() {
+  let rank = JSON.parse(localStorage.getItem("irracional_ranking") || "[]");
+  rank.push({ pontos: score, fase: level, data: new Date().toLocaleDateString() });
+  rank.sort((a, b) => b.pontos - a.pontos);
+  rank = rank.slice(0, 5);
+  localStorage.setItem("irracional_ranking", JSON.stringify(rank));
+
+  let html = "<h3>🏆 Ranking</h3><ol>";
+  rank.forEach(r => {
+    html += `<li>${r.pontos} pts (fase ${r.fase}) - ${r.data}</li>`;
+  });
+  html += "</ol>";
+  document.getElementById("ranking").innerHTML = html;
+}
+  </script>
+</body>
+</html>
